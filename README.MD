@@ -9,6 +9,7 @@ Avant de démarrer, assurez-vous que vous avez satisfait aux prérequis suivants
 - **PHP**: Version 8.0 minimum.
 - **Composer**: Version 2.0 ou ultérieure.
 - **Base de données**: MySQL ou compatible MariaDB.
+- **Symfony CLI**: Recommandé pour un meilleur développement.
 
 ## Configuration initiale
 
@@ -66,15 +67,23 @@ Pour peupler la base de données avec des données initiales, utilisez les fixtu
 ```bash
 php bin/console doctrine:fixtures:load
 ```
-Cette commande chargera toutes les données de test définies dans vos classes de fixtures.
-
 
 ## Démarrage de l'application
 
-Pour démarrer le serveur de développement local :
+Pour démarrer le serveur de développement, vous avez deux options :
 
-```bash
-symfony server:start
-```
+1. **Avec Symfony CLI** (Recommandé):
+   Si vous avez Symfony CLI installé, vous pouvez simplement lancer :
+   ```bash
+   symfony server:start
+   ```
+   Cela démarrera un serveur local à l'adresse `http://localhost:8000`.
 
-Visitez `http://localhost:8000` dans votre navigateur pour voir l'application en action.
+2. **Sans Symfony CLI**:
+   Utilisez le serveur web interne de PHP en lançant :
+   ```bash
+   php -S localhost:8000 -t public
+   ```
+   Assurez-vous que votre navigateur pointe vers `http://localhost:8000`.
+
+Visitez l'URL indiquée par la méthode choisie pour voir l'application en action.

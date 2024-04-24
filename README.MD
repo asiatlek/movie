@@ -59,6 +59,16 @@ Appliquez les migrations pour mettre à jour votre base de données :
 php bin/console doctrine:migrations:migrate
 ```
 
+### Chargement des données de test
+
+Pour peupler la base de données avec des données initiales, utilisez les fixtures :
+
+```bash
+php bin/console doctrine:fixtures:load
+```
+Cette commande chargera toutes les données de test définies dans vos classes de fixtures.
+
+
 ## Démarrage de l'application
 
 Pour démarrer le serveur de développement local :

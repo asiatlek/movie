@@ -3,9 +3,9 @@
 namespace App\Entity;
 
 use App\Repository\MovieRepository;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity(repositoryClass: MovieRepository::class)]
 class Movie
@@ -22,15 +22,28 @@ class Movie
     #[ORM\Column(length: 128)]
     private ?string $name = null;
 
+    #[Assert\Length(
+        max: 2048,
+        maxMessage: 'Your first name cannot be longer than {{ limit }} characters',
+    )]
     #[ORM\Column(length: 2048)]
     private ?string $description = null;
 
-    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    private ?\DateTimeInterface $releaseAt = null;
+    #[Assert\NotBlank]
+    #[Assert\Regex(
+        pattern: "/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/",
+        message: "Le format de la date de sortie doit être au format ISO 8601."
+    )]
+    #[ORM\Column(length: 25)]
+    private ?string $releaseAt = null;
 
-    #[ORM\Column(nullable: true)]
+    #[Assert\Regex(
+        pattern: "/^[1-5]$/",
+        message: "La valeur doit être un entier entre 1 et 5."
+    )]
+    #[ORM\Column(type: "integer", nullable: true)]
     private ?int $rating = null;
-
+    
     public function getId(): ?int
     {
         return $this->id;
@@ -60,12 +73,12 @@ class Movie
         return $this;
     }
 
-    public function getReleaseAt(): ?\DateTimeInterface
+    public function getReleaseAt(): ?string
     {
         return $this->releaseAt;
     }
 
-    public function setReleaseAt(\DateTimeInterface $releaseAt): static
+    public function setReleaseAt(string $releaseAt): static
     {
         $this->releaseAt = $releaseAt;
 

@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Movie;
 use App\Repository\MovieRepository;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
@@ -11,6 +12,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class MovieController extends AbstractController
 {
@@ -26,108 +28,113 @@ class MovieController extends AbstractController
         $this->_movieRepository = $movieRepository;
     }
 
-    #[Route('/movies', name: 'app_movie')]
-    public function listMovies(): JsonResponse
+    #[Route('/movies', name: 'app_movies', methods: ['GET'])]
+    public function list(): JsonResponse
     {
         $movies = $this->_movieRepository->findAll();
 
         if (!$movies) {
-            return new BadRequestException('Erreur sur la requete', Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(
+                ['message' => "Aucun film trouvé."]
+            , Response::HTTP_NOT_FOUND);
         }
 
-        $moviesToJson = [];
-
-        foreach ($movies as $movie) {
-            $moviesToJson[] = [
-                'id' => $movie->getId(),
-                'nom' => $movie->getName(),
-                'description' => $movie->getDescription(),
-                'date de parution' => $movie->getReleaseAt(),
-                'note' => $movie->getRating(),
-            ];
-        }
-
-        return $this->json($moviesToJson, Response::HTTP_OK);
+        return $this->json($movies, Response::HTTP_OK);
     }
 
-    #[Route('/movie/{id}', name: 'app_movie_show')]
-    public function showMovie(int $id): JsonResponse
+    #[Route('/movie/{id}', name: 'app_movie_show',   methods: ['GET'])]
+    public function show(int $id): JsonResponse
     {
         $movie = $this->_movieRepository->findOneBy(['id' => $id]);
 
         if (!$movie) {
-            return new BadRequestException('Erreur sur la requete', Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(
+                ['message' => "Aucun film trouvé."]
+            , Response::HTTP_NOT_FOUND);
         }
 
-        $movieToJson = [
-            'id' => $movie->getId(),
-            'nom' => $movie->getName(),
-            'description' => $movie->getDescription(),
-            'date de parution' => $movie->getReleaseAt(),
-            'note' => $movie->getRating(),
-        ];
-
-        return $this->json($movieToJson, Response::HTTP_OK);
+        return $this->json($movie, Response::HTTP_OK);
     }
 
-    #[Route('/movie/new', name: 'app_movie_new', methods: ['POST'])]
-    public function createMovie(Request $request): Response
+    #[Route('/movie', name: 'app_movie_new', methods: ['POST'])]
+    public function createMovie(Request $request, ValidatorInterface $validator): Response
     {
         $requestData = json_decode($request->getContent(), true);
-
+        
         if (!isset($requestData)) {
-            return new BadRequestException('Erreur sur la requete', Response::HTTP_BAD_REQUEST);
+            return new Response(
+                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.", 
+                Response::HTTP_BAD_REQUEST
+            );
         }
 
         $movie = new Movie();
         $movie->setName($requestData['name']);
         $movie->setDescription($requestData['description']);
+        $movie->setReleaseAt($requestData['releaseAt']);
         $movie->setRating($requestData['rating']);
  
         $this->_entityManager->persist($movie);
+
+        $errors = $validator->validate($movie);
+        if (count($errors) > 0) {
+            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
+        }
+
         $this->_entityManager->flush();
 
         return new Response('Film créé avec succès!', Response::HTTP_CREATED);
     }
 
-    #[Route('/movie/edit/{id}', name: 'app_movie_edit', methods: ['PUT'])]
-    public function updateMovie(Request $request, int $id): Response
+    #[Route('/movie/edit/{id}', name: 'app_movie_edit', methods: ['PATCH'])]
+    public function update(Request $request, int $id, ValidatorInterface $validator): JsonResponse
     {
         $movie = $this->_movieRepository->findOneBy(['id' => $id]);
 
         if (!$movie) {
-            return new Response('Film non trouvé', Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['message' => 'Film non trouvé'], Response::HTTP_NOT_FOUND);
         }
 
         $requestData = json_decode($request->getContent(), true);
 
-        if (!isset($requestData)) {
-            return new BadRequestException('Erreur sur la requete', Response::HTTP_BAD_REQUEST);
+        if (!$requestData) {
+            return new Response(
+                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.", 
+                Response::HTTP_BAD_REQUEST
+            );
         }
 
-        $movie->setName($requestData['name']);
-        $movie->setDescription($requestData['description']);
-        $movie->setRating($requestData['rating']);
+        foreach ($requestData as $key => $value) {
+            $methodName = 'set' . ucfirst($key);
+            if (method_exists($movie, $methodName)) {
+                $movie->$methodName($value);
+            }
+        }
+
+        $errors = $validator->validate($movie);
+        if (count($errors) > 0) {
+            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
+        }
 
         $this->_entityManager->flush();
 
-        return new Response('Film mis à jour avec succès!', Response::HTTP_OK);
+        return new JsonResponse(['message' => 'Film mis à jour avec succès!'], Response::HTTP_OK);
     }
 
     #[Route('/movie/{id}', name: 'app_movie_delete', methods: ['DELETE'])]
-    public function deleteMovie(Request $request, int $id): Response
+    public function deleteMovie(int $id): Response
     {
         $movie = $this->_movieRepository->findOneBy(['id' => $id]);
 
         if (!$movie) {
-            return new BadRequestException('Erreur sur la requete', Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(
+                ['message' => "Aucun film trouvé."]
+            , Response::HTTP_NOT_FOUND);
         }
-
+        
         $this->_entityManager->remove($movie);
         $this->_entityManager->flush();
 
         return new Response(null, Response::HTTP_NO_CONTENT);
     }
-
-
 }

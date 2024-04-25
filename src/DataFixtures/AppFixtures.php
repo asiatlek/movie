@@ -19,10 +19,12 @@ class AppFixtures extends Fixture
         $twentyYearsAgo = (new DateTime())->modify('-20 years');
 
         for ($i = 0; $i < 100; $i++) {
+            $releaseAt = (new DateTime)->setTimestamp(mt_rand($twentyYearsAgo->getTimestamp(), $today->getTimestamp()));
+
             $movie = new Movie($faker);
             $movie->setName($faker->movie);
             $movie->setDescription($faker->overview);
-            $movie->setReleaseAt((new DateTime)->setTimestamp(mt_rand($twentyYearsAgo->getTimestamp(), $today->getTimestamp())));
+            $movie->setReleaseAt($releaseAt->format(\DateTime::ISO8601));
             $movie->setRating(mt_rand(1, 5));
             $manager->persist($movie);
         }

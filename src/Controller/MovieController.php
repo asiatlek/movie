@@ -7,7 +7,6 @@ use App\Repository\MovieRepository;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -78,7 +77,7 @@ class MovieController extends AbstractController
 
         $errors = $validator->validate($movie);
         if (count($errors) > 0) {
-            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $this->_entityManager->flush();
@@ -113,7 +112,7 @@ class MovieController extends AbstractController
 
         $errors = $validator->validate($movie);
         if (count($errors) > 0) {
-            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $this->_entityManager->flush();

@@ -28,9 +28,12 @@ class MovieController extends AbstractController
     }
 
     #[Route('/movies', name: 'app_movies', methods: ['GET'])]
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
-        $movies = $this->_movieRepository->findAll();
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 3);
+
+        $movies = $this->_movieRepository->findAllWithPagination($page, $limit);
 
         if (!$movies) {
             return new JsonResponse(
@@ -55,7 +58,7 @@ class MovieController extends AbstractController
         return $this->json($movie, Response::HTTP_OK);
     }
 
-    #[Route('/movie', name: 'app_movie_new', methods: ['POST'])]
+    #[Route('/movie', name: 'app_movie_new', methods: ['POST'], format: 'json')]
     public function createMovie(Request $request, ValidatorInterface $validator): Response
     {
         $requestData = json_decode($request->getContent(), true);
@@ -85,7 +88,7 @@ class MovieController extends AbstractController
         return new Response('Film créé avec succès!', Response::HTTP_CREATED);
     }
 
-    #[Route('/movie/edit/{id}', name: 'app_movie_edit', methods: ['PATCH'])]
+    #[Route('/movie/edit/{id}', name: 'app_movie_edit', methods: ['PATCH'], format: 'json')]
     public function update(Request $request, int $id, ValidatorInterface $validator): JsonResponse
     {
         $movie = $this->_movieRepository->findOneBy(['id' => $id]);

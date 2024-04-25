@@ -21,6 +21,13 @@ class MovieRepository extends ServiceEntityRepository
         parent::__construct($registry, Movie::class);
     }
 
+    public function findAllWithPagination($page, $limit) {
+        $qb = $this->createQueryBuilder('m')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit);
+        return $qb->getQuery()->getResult();
+    }
+
     //    /**
     //     * @return Movie[] Returns an array of Movie objects
     //     */

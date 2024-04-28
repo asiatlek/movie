@@ -12,10 +12,15 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use App\Entity\Movie;
 use App\Service\HalResponseBuilder;
+use Nelmio\ApiDocBundle\Annotation\Model as AnnotationModel;
+use Nelmio\ApiDocBundle\Model\Model;
 use Symfony\Component\Routing\Requirement\Requirement;
+use OpenApi\Attributes as OA;
 
 class CategoryController extends AbstractController
 {
+
+
     private $_entityManager;
     private $_categoryRepository;
 
@@ -27,8 +32,15 @@ class CategoryController extends AbstractController
         $this->_categoryRepository = $categoryRepository;
     }
 
-
     #[Route('/categories', methods: ['GET'])]
+    #[OA\Response(
+        response: 200,
+        description: 'Returns all categories',
+        content: new OA\JsonContent(
+            type: 'array',
+            items: new OA\Items(ref: new AnnotationModel(type: Category::class, groups: ['category.index']))
+        )
+    )]
     public function getCategories(HalResponseBuilder $halResponse): JsonResponse
     {
         $categories = $this->_categoryRepository->findAll();

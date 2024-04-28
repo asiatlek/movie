@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Movie;
 use App\Repository\MovieRepository;
+use App\Service\HalResponseBuilder;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -11,6 +12,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class MovieController extends AbstractController
@@ -26,8 +28,8 @@ class MovieController extends AbstractController
         $this->_movieRepository = $movieRepository;
     }
 
-    #[Route('/movies', name: 'app_movies', methods: ['GET'])]
-    public function list(Request $request): JsonResponse
+    #[Route('/movies', methods: ['GET'])]
+    public function list(Request $request, HalResponseBuilder $halResponse): JsonResponse
     {
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 3);
@@ -41,21 +43,22 @@ class MovieController extends AbstractController
             );
         }
 
-        return $this->json($movies, Response::HTTP_OK);
-    }
-
-    #[Route('/movie/{id}', name: 'app_movie_show',   methods: ['GET'])]
-    public function show(int $id): JsonResponse
-    {
-        $movie = $this->_movieRepository->findOneBy(['id' => $id]);
-
-        if (!$movie) {
-            return new JsonResponse(
-                ['message' => "Aucun film trouvé."],
-                Response::HTTP_NOT_FOUND
-            );
+        $halMovies = [];
+        foreach ($movies as $movie) {
+            $links = $halResponse->createLinksForMovie($movie);
+            $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
+            $halMovies[] = $movie;
         }
 
+        return $this->json($halMovies, Response::HTTP_OK, [], ['groups' => 'movie.index']);
+    }
+
+    #[Route('/movie/{id}', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
+    public function show(Movie $movie, HalResponseBuilder $halResponse): JsonResponse
+    {
+
+        $links = $halResponse->createLinksForMovie($movie);
+        $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
         return $this->json($movie, Response::HTTP_OK);
     }
 

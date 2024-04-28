@@ -35,12 +35,13 @@ class CategoryController extends AbstractController
         if (!$categories) {
             return new JsonResponse(['error' => 'Erreur sur la requete'], Response::HTTP_BAD_REQUEST);
         }
-        $category = [];
+        $halCategories = [];
         foreach ($categories as $category) {
             $links = $halResponse->createLinksForCategory($category);
             $category = $halResponse->buildHalResponse($category, $links, ['groups' => 'category.index']);
+            $halCategories[] = $category;
         }
-        return $this->json($category, Response::HTTP_OK, [], ['groups' => 'category.index']);
+        return $this->json($halCategories, Response::HTTP_OK, [], ['groups' => 'category.index']);
     }
 
 

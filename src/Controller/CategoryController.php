@@ -11,6 +11,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use App\Entity\Movie;
+use App\Service\HalResponseBuilder;
 use Symfony\Component\Routing\Requirement\Requirement;
 
 class CategoryController extends AbstractController
@@ -28,21 +29,27 @@ class CategoryController extends AbstractController
 
 
     #[Route('/categories', methods: ['GET'])]
-    public function getCategories(): JsonResponse
+    public function getCategories(HalResponseBuilder $halResponse): JsonResponse
     {
-        $categorys = $this->_categoryRepository->findAll();
-        if (!$categorys) {
+        $categories = $this->_categoryRepository->findAll();
+        if (!$categories) {
             return new JsonResponse(['error' => 'Erreur sur la requete'], Response::HTTP_BAD_REQUEST);
         }
-
-        return $this->json($categorys, Response::HTTP_OK, [], ['groups' => 'category.index']);
+        $category = [];
+        foreach ($categories as $category) {
+            $links = $halResponse->createLinksForCategory($category);
+            $category = $halResponse->buildHalResponse($category, $links, ['groups' => 'category.index']);
+        }
+        return $this->json($category, Response::HTTP_OK, [], ['groups' => 'category.index']);
     }
 
 
     #[Route('/category/{id}', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
-    public function getCategoryById(Category $category): JsonResponse
+    public function getCategoryById(Category $category, HalResponseBuilder $halResponse): JsonResponse
     {
-        return $this->json($category, Response::HTTP_OK, [], ['groups' => 'category.index']);
+        $links = $halResponse->createLinksForCategory($category);
+        $category = $halResponse->buildHalResponse($category, $links, ['groups' => 'category.info']);
+        return $this->json($category, Response::HTTP_OK);
     }
 
     #[Route('/category', methods: ['POST'])]
@@ -60,7 +67,7 @@ class CategoryController extends AbstractController
         $this->_entityManager->persist($category);
         $this->_entityManager->flush();
 
-        return new Response('Catégorie créé avec succès!', Response::HTTP_CREATED);
+        return $this->json($category, Response::HTTP_OK, [], ['groups' => 'category.index']);
     }
 
     #[Route('/category/{id}', methods: ['PATCH'], requirements: ['id' => Requirement::DIGITS])]
@@ -126,16 +133,26 @@ class CategoryController extends AbstractController
     }
 
     #[Route('/movie/{id}/categories', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
-    public function getCategoriesByMovie(Movie $movie): Response
+    public function getCategoriesByMovie(Movie $movie, HalResponseBuilder $halResponse): Response
     {
         $categories = $movie->getCategories();
-        return $this->json($categories, 200, [], ['groups' => 'category.info']);
+        $category = [];
+        foreach ($categories as $category) {
+            $links = $halResponse->createLinksForCategory($category);
+            $category = $halResponse->buildHalResponse($category, $links, ['groups' => 'category.info']);
+        }
+        return $this->json($category, 200, [], ['groups' => 'category.info']);
     }
 
     #[Route('/category/{id}/movies', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
-    public function getMoviesByCategory(Category $category): Response
+    public function getMoviesByCategory(Category $category, HalResponseBuilder $halResponseBuilder): Response
     {
         $movies = $category->getMovies();
-        return $this->json($movies, 200, [], ['groups' => 'movie.info']);
+        $results = [];
+        foreach ($movies as $movie) {
+            $links = $halResponseBuilder->createLinksForMovie($movie);
+            $results[] = $halResponseBuilder->buildHalResponse($movie, $links, ['groups' => 'movie.info']);
+        }
+        return $this->json($results, Response::HTTP_OK);
     }
 }

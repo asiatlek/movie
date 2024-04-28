@@ -86,4 +86,4 @@ Pour démarrer le serveur de développement, vous avez deux options :
    ```
    Assurez-vous que votre navigateur pointe vers `http://localhost:8000`.
 
-Visitez l'URL indiquée par la méthode choisie pour voir l'application en action.
+Visitez l'URL suivante pour plus de facilité: `http://localhost:8000/api/doc`.

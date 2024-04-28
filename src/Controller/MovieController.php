@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Movie;
 use App\Repository\MovieRepository;
+use App\Service\HalResponseBuilder;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -11,6 +12,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class MovieController extends AbstractController
@@ -21,14 +23,13 @@ class MovieController extends AbstractController
     public function __construct(
         EntityManagerInterface $entityManager,
         MovieRepository $movieRepository
-        )
-    {
+    ) {
         $this->_entityManager = $entityManager;
         $this->_movieRepository = $movieRepository;
     }
 
-    #[Route('/movies', name: 'app_movies', methods: ['GET'])]
-    public function list(Request $request): JsonResponse
+    #[Route('/movies', methods: ['GET'])]
+    public function list(Request $request, HalResponseBuilder $halResponse): JsonResponse
     {
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 3);
@@ -37,24 +38,27 @@ class MovieController extends AbstractController
 
         if (!$movies) {
             return new JsonResponse(
-                ['message' => "Aucun film trouvé."]
-            , Response::HTTP_NOT_FOUND);
+                ['message' => "Aucun film trouvé."],
+                Response::HTTP_NOT_FOUND
+            );
         }
 
-        return $this->json($movies, Response::HTTP_OK);
+        $halMovies = [];
+        foreach ($movies as $movie) {
+            $links = $halResponse->createLinksForMovie($movie);
+            $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
+            $halMovies[] = $movie;
+        }
+
+        return $this->json($halMovies, Response::HTTP_OK, [], ['groups' => 'movie.index']);
     }
 
-    #[Route('/movie/{id}', name: 'app_movie_show',   methods: ['GET'])]
-    public function show(int $id): JsonResponse
+    #[Route('/movie/{id}', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
+    public function show(Movie $movie, HalResponseBuilder $halResponse): JsonResponse
     {
-        $movie = $this->_movieRepository->findOneBy(['id' => $id]);
 
-        if (!$movie) {
-            return new JsonResponse(
-                ['message' => "Aucun film trouvé."]
-            , Response::HTTP_NOT_FOUND);
-        }
-
+        $links = $halResponse->createLinksForMovie($movie);
+        $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
         return $this->json($movie, Response::HTTP_OK);
     }
 
@@ -62,10 +66,10 @@ class MovieController extends AbstractController
     public function createMovie(Request $request, ValidatorInterface $validator): Response
     {
         $requestData = json_decode($request->getContent(), true);
-        
+
         if (!isset($requestData)) {
             return new Response(
-                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.", 
+                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.",
                 Response::HTTP_BAD_REQUEST
             );
         }
@@ -75,7 +79,7 @@ class MovieController extends AbstractController
         $movie->setDescription($requestData['description']);
         $movie->setReleaseAt($requestData['releaseAt']);
         $movie->setRating($requestData['rating']);
- 
+
         $this->_entityManager->persist($movie);
 
         $errors = $validator->validate($movie);
@@ -101,7 +105,7 @@ class MovieController extends AbstractController
 
         if (!$requestData) {
             return new Response(
-                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.", 
+                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.",
                 Response::HTTP_BAD_REQUEST
             );
         }
@@ -130,10 +134,11 @@ class MovieController extends AbstractController
 
         if (!$movie) {
             return new JsonResponse(
-                ['message' => "Aucun film trouvé."]
-            , Response::HTTP_NOT_FOUND);
+                ['message' => "Aucun film trouvé."],
+                Response::HTTP_NOT_FOUND
+            );
         }
-        
+
         $this->_entityManager->remove($movie);
         $this->_entityManager->flush();
 

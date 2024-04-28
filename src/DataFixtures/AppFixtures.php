@@ -3,6 +3,7 @@
 namespace App\DataFixtures;
 
 use App\Entity\Movie;
+use App\Entity\Category;
 use DateTime;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
@@ -20,13 +21,15 @@ class AppFixtures extends Fixture
 
         for ($i = 0; $i < 100; $i++) {
             $releaseAt = (new DateTime)->setTimestamp(mt_rand($twentyYearsAgo->getTimestamp(), $today->getTimestamp()));
-
-            $movie = new Movie($faker);
+            $movie = new Movie();
+            $category = new Category();
+            $category->setName($faker->movieGenre);
             $movie->setName($faker->movie);
             $movie->setDescription($faker->overview);
             $movie->setReleaseAt($releaseAt->format(\DateTime::ISO8601));
             $movie->setRating(mt_rand(1, 5));
             $manager->persist($movie);
+            $manager->persist($category);
         }
 
         $manager->flush();

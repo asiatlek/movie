@@ -137,23 +137,25 @@ class CategoryController extends AbstractController
     public function getCategoriesByMovie(Movie $movie, HalResponseBuilder $halResponse): Response
     {
         $categories = $movie->getCategories();
-        $category = [];
+        $halCategories = [];
         foreach ($categories as $category) {
             $links = $halResponse->createLinksForCategory($category);
             $category = $halResponse->buildHalResponse($category, $links, ['groups' => 'category.info']);
+            $halCategories[] = $category;
         }
-        return $this->json($category, 200, [], ['groups' => 'category.info']);
+        return $this->json($halCategories, 200, [], ['groups' => 'category.info']);
     }
 
     #[Route('/category/{id}/movies', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
     public function getMoviesByCategory(Category $category, HalResponseBuilder $halResponseBuilder): Response
     {
         $movies = $category->getMovies();
-        $results = [];
+        $halMovies = [];
         foreach ($movies as $movie) {
             $links = $halResponseBuilder->createLinksForMovie($movie);
-            $results[] = $halResponseBuilder->buildHalResponse($movie, $links, ['groups' => 'movie.info']);
+            $results = $halResponseBuilder->buildHalResponse($movie, $links, ['groups' => 'movie.info']);
+            $halMovies[] = $results;
         }
-        return $this->json($results, Response::HTTP_OK);
+        return $this->json($halMovies, Response::HTTP_OK);
     }
 }

@@ -5,143 +5,185 @@ namespace App\Controller;
 use App\Entity\Movie;
 use App\Repository\MovieRepository;
 use App\Service\HalResponseBuilder;
-use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class MovieController extends AbstractController
 {
-    private $_entityManager;
-    private $_movieRepository;
+	private $_entityManager;
+	private $_movieRepository;
+	private $logger;
 
-    public function __construct(
-        EntityManagerInterface $entityManager,
-        MovieRepository $movieRepository
-    ) {
-        $this->_entityManager = $entityManager;
-        $this->_movieRepository = $movieRepository;
-    }
+	public function __construct(
+		EntityManagerInterface $entityManager,
+		MovieRepository $movieRepository,
+		LoggerInterface $logger
+	) {
+		$this->_entityManager = $entityManager;
+		$this->_movieRepository = $movieRepository;
+		$this->logger = $logger;
+	}
 
-    #[Route('/movies', methods: ['GET'])]
-    public function list(Request $request, HalResponseBuilder $halResponse): JsonResponse
-    {
-        $page = $request->get('page', 1);
-        $limit = $request->get('limit', 3);
+	#[Route('/movies', methods: ['GET'])]
+	public function list(Request $request, HalResponseBuilder $halResponse): JsonResponse
+	{
+		try {
+			$page = $request->query->getInt('page', 1);
+			$limit = $request->query->getInt('limit', 3);
 
-        $movies = $this->_movieRepository->findAllWithPagination($page, $limit);
+			if ($page < 1 || $limit < 1) {
+				throw new HttpException(Response::HTTP_BAD_REQUEST, 'Les paramètres de recherche sont invalides.');
+			}
 
-        if (!$movies) {
-            return new JsonResponse(
-                ['message' => "Aucun film trouvé."],
-                Response::HTTP_NOT_FOUND
-            );
-        }
+			$movies = $this->_movieRepository->findAllWithPagination($page, $limit);
 
-        $halMovies = [];
-        foreach ($movies as $movie) {
-            $links = $halResponse->createLinksForMovie($movie);
-            $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
-            $halMovies[] = $movie;
-        }
+			if (!$movies) {
+				return new JsonResponse([], Response::HTTP_NO_CONTENT);
+			}
 
-        return $this->json($halMovies, Response::HTTP_OK, [], ['groups' => 'movie.index']);
-    }
+			$halMovies = [];
+			foreach ($movies as $movie) {
+				$links = $halResponse->createLinksForMovie($movie);
+				$movieData = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
+				$halMovies[] = $movieData;
+			}
 
-    #[Route('/movie/{id}', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
-    public function show(Movie $movie, HalResponseBuilder $halResponse): JsonResponse
-    {
+			return $this->json($halMovies, Response::HTTP_OK, [], ['groups' => 'movie.index']);
+		} catch (HttpException $e) {
+			return $this->json(['message' => $e->getMessage()], $e->getStatusCode());
+		} catch (\Exception $e) {
 
-        $links = $halResponse->createLinksForMovie($movie);
-        $movie = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
-        return $this->json($movie, Response::HTTP_OK);
-    }
+			return $this->json(['message' => 'Erreur interne du serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
 
-    #[Route('/movie', name: 'app_movie_new', methods: ['POST'], format: 'json')]
-    public function createMovie(Request $request, ValidatorInterface $validator): Response
-    {
-        $requestData = json_decode($request->getContent(), true);
+	#[Route('/movies/{id}', methods: ['GET'], requirements: ['id' => Requirement::DIGITS])]
+	public function show(int $id, HalResponseBuilder $halResponse): JsonResponse
+	{
+		try {
+			$movie = $this->_entityManager->getRepository(Movie::class)->find($id);
 
-        if (!isset($requestData)) {
-            return new Response(
-                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.",
-                Response::HTTP_BAD_REQUEST
-            );
-        }
+			if (!$movie) {
+				throw new NotFoundHttpException('Le film est inconnu.');
+			}
+			$links = $halResponse->createLinksForMovie($movie);
+			$movieData = $halResponse->buildHalResponse($movie, $links, ['groups' => 'movie.index']);
 
-        $movie = new Movie();
-        $movie->setName($requestData['name']);
-        $movie->setDescription($requestData['description']);
-        $movie->setReleaseAt($requestData['releaseAt']);
-        $movie->setRating($requestData['rating']);
+			return $this->json($movieData, Response::HTTP_OK);
+		} catch (NotFoundHttpException $e) {
+			return $this->json(['message' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+		} catch (\Exception $e) {
+			return $this->json(['message' => 'Erreur interne du serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
 
-        $this->_entityManager->persist($movie);
+	#[Route('/movies', name: 'app_movie_new', methods: ['POST'], format: 'json')]
+	public function createMovie(Request $request, ValidatorInterface $validator): Response
+	{
+		try {
+			$requestData = json_decode($request->getContent(), true);
 
-        $errors = $validator->validate($movie);
-        if (count($errors) > 0) {
-            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
+			if (!$requestData) {
+				return new JsonResponse(
+					['message' => "Les paramètres de recherche sont invalides."],
+					Response::HTTP_BAD_REQUEST
+				);
+			}
 
-        $this->_entityManager->flush();
+			$movie = new Movie();
+			$movie->setName($requestData['name'] ?? '');
+			$movie->setDescription($requestData['description'] ?? '');
+			$movie->setDuration($requestData['duration'] ?? 0);
+			$movie->setRating($requestData['rating'] ?? 0);
 
-        return new Response('Film créé avec succès!', Response::HTTP_CREATED);
-    }
+			$errors = $validator->validate($movie);
+			if (count($errors) > 0) {
+				return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
+			}
 
-    #[Route('/movie/edit/{id}', name: 'app_movie_edit', methods: ['PATCH'], format: 'json')]
-    public function update(Request $request, int $id, ValidatorInterface $validator): JsonResponse
-    {
-        $movie = $this->_movieRepository->findOneBy(['id' => $id]);
+			$this->_entityManager->persist($movie);
+			$this->_entityManager->flush();
 
-        if (!$movie) {
-            return new JsonResponse(['message' => 'Film non trouvé'], Response::HTTP_NOT_FOUND);
-        }
+			return new JsonResponse(['message' => 'Film créé avec succès!'], Response::HTTP_CREATED);
+		} catch (\Exception $e) {
+			$this->logger->error($e->getMessage());
 
-        $requestData = json_decode($request->getContent(), true);
+			return new JsonResponse(['message' => 'Erreur interne du serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
 
-        if (!$requestData) {
-            return new Response(
-                "Une erreur s'est produite lors du traitement de votre demande. Veuillez réessayer ultérieurement.",
-                Response::HTTP_BAD_REQUEST
-            );
-        }
+	#[Route('/movies/{id}', name: 'app_movie_edit', methods: ['PUT'], format: 'json')]
+	public function update(Request $request, int $id, ValidatorInterface $validator): JsonResponse
+	{
+		try {
+			$movie = $this->_movieRepository->find($id);
 
-        foreach ($requestData as $key => $value) {
-            $methodName = 'set' . ucfirst($key);
-            if (method_exists($movie, $methodName)) {
-                $movie->$methodName($value);
-            }
-        }
+			if (!$movie) {
+				return new JsonResponse(['message' => 'Film non trouvé'], Response::HTTP_NOT_FOUND);
+			}
 
-        $errors = $validator->validate($movie);
-        if (count($errors) > 0) {
-            return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
+			$requestData = json_decode($request->getContent(), true);
 
-        $this->_entityManager->flush();
+			if (!$requestData) {
+				return new JsonResponse(
+					['message' => "Les paramètres de recherche sont invalides."],
+					Response::HTTP_BAD_REQUEST
+				);
+			}
 
-        return new JsonResponse(['message' => 'Film mis à jour avec succès!'], Response::HTTP_OK);
-    }
+			foreach ($requestData as $key => $value) {
+				$methodName = 'set' . ucfirst($key);
+				if (method_exists($movie, $methodName)) {
+					$movie->$methodName($value);
+				}
+			}
 
-    #[Route('/movie/{id}', name: 'app_movie_delete', methods: ['DELETE'])]
-    public function deleteMovie(int $id): Response
-    {
-        $movie = $this->_movieRepository->findOneBy(['id' => $id]);
+			$errors = $validator->validate($movie);
+			if (count($errors) > 0) {
+				return new JsonResponse(['message' => 'Erreur de validation', 'errors' => (string) $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
+			}
 
-        if (!$movie) {
-            return new JsonResponse(
-                ['message' => "Aucun film trouvé."],
-                Response::HTTP_NOT_FOUND
-            );
-        }
+			$this->_entityManager->flush();
 
-        $this->_entityManager->remove($movie);
-        $this->_entityManager->flush();
+			return new JsonResponse(['message' => 'Film mis à jour avec succès!'], Response::HTTP_OK);
+		} catch (\Exception $e) {
+			$this->logger->error($e->getMessage());
 
-        return new Response(null, Response::HTTP_NO_CONTENT);
-    }
+			return new JsonResponse(['message' => 'Erreur interne du serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+
+	#[Route('/movies/{id}', name: 'app_movie_delete', methods: ['DELETE'])]
+	public function deleteMovie(int $id): Response
+	{
+		try {
+			$movie = $this->_movieRepository->find($id);
+
+			if (!$movie) {
+				return new JsonResponse(
+					['message' => "Aucun film trouvé."],
+					Response::HTTP_NOT_FOUND
+				);
+			}
+
+			$this->_entityManager->remove($movie);
+			$this->_entityManager->flush();
+
+			return new Response(null, Response::HTTP_NO_CONTENT);
+		} catch (\Exception $e) {
+			$this->logger->error($e->getMessage());
+
+			return new JsonResponse(['message' => 'Erreur interne du serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
 }
